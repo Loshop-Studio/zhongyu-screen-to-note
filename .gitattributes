@@ -1,0 +1,16 @@
+# 笔记模板文件对行尾敏感（路由表被换成 CRLF 后 App 会解析失败），
+# 一律按二进制处理，禁止 git 做任何换行转换。
+*.bin   binary
+*.png   binary
+*.webp  binary
+
+# 源码统一 LF
+*.py        text eol=lf
+*.md        text eol=lf
+.gitignore  text eol=lf
+.gitattributes text eol=lf
+*.json      text eol=lf
+*.txt       text eol=lf
+
+# Windows 批处理必须 CRLF
+*.bat       text eol=crlf

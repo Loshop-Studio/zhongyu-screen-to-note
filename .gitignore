@@ -1,0 +1,22 @@
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 打包产物（体积大、可重新生成，不要进仓库）
+build/
+dist/
+*.spec
+
+# 本地日志与临时文件
+*.log
+_*.jpg
+_*.png
+_*.py
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store

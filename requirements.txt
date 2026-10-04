@@ -1,0 +1,6 @@
+# 运行依赖
+Pillow>=9.0            # 截图与图片处理（ImageGrab / resize / JPEG 编码）
+pycryptodome>=3.15     # 与云服务通信时的 AES 加解密
+
+# 打包依赖（只想运行源码的话可以不装）
+pyinstaller>=6.0
