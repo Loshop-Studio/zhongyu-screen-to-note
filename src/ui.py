@@ -90,6 +90,12 @@ SMART_CHECK_MS = 2000        # 智能模式查前台窗口的间隔（固定，�
 SMART_POLL_MS = 500          # 主线程检查"该不该推了"的节拍
 MIN_INTERVAL = 4.0           # 间隔下限（秒）
 
+# 上传其实已经完成了，但**再等一下才报"完成"**。
+# 原因：我们这边上传结束 ≠ 平板那边刷新出来，中间还有约 1 秒（服务端落库 + 平板拉取）。
+# 立刻报完成的话，你抬头看平板还是旧的，会以为没生效。
+# 等这一下，界面说"好了"的时候平板也差不多好了，两边对得上。
+DONE_DELAY_MS = 1000
+
 
 def _read_mode():
     """读上次的模式，认不出来的（比如手改坏了）一律退回手动。"""
@@ -636,6 +642,10 @@ class FloatingBar(object):
             res, isnew = core.push(img, log=logger)
             msg = ("新建笔记 " if isnew else "已更新 ") + time.strftime("%H:%M:%S")
             logger("完成：" + msg)
+            # ⚠️ 上传其实到此就结束了，但**再等一小会儿才报"完成"** ——
+            # 因为平板那边刷新出来还差约 1 秒，立刻报会让人以为没生效。
+            # 时间戳取的是上面 `time.strftime` 那一刻，仍然如实反映上传完成时刻。
+            time.sleep(DONE_DELAY_MS / 1000.0)
             self._ui_queue.put(("done", msg, OK))
         except Exception as e:
             logger("失败：" + str(e))
