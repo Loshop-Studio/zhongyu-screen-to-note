@@ -246,3 +246,20 @@ def load_note_state():
     if not d.get("fileId") or not d.get("pageHash"):
         return None
     return d
+
+
+def clear_note_state():
+    """
+    忘掉本地记的那本笔记。
+
+    什么时候用：用户在平板上把这本笔记删了。
+    此时云端列表里已经查不到它，但服务端数据库里的记录还没清干净，
+    继续拿旧 ID 去 AddOrUpdate 会撞主键（Duplicate entry）。
+    把它忘掉、换一个新 ID 重建，就绕开了。
+    """
+    try:
+        if os.path.exists(STATE_FILE):
+            os.remove(STATE_FILE)
+        return True
+    except Exception:
+        return False

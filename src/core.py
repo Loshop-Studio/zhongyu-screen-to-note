@@ -35,6 +35,24 @@ def build_client():
     return cli
 
 
+def _note_exists(cli, file_id):
+    """
+    查这本笔记还在不在云端。
+
+    ⚠️ 用户在平板上把笔记删掉后，本地还记着旧 ID，而服务端数据库里的记录
+    可能还没清干净 —— 再拿旧 ID 去 AddOrUpdate 就会撞主键：
+        Duplicate entry 'sxzxx-690-xxx' for key 'ezy_notes.PRIMARY'
+    所以每次推送前都确认一下。
+
+    查询本身失败时（网络抖动等）一律当作"还在"，宁可按老路走，
+    也不要因为一次网络问题就莫名其妙新建一本笔记。
+    """
+    try:
+        return any(n.get("fileId") == file_id for n in cli.get_all_notes())
+    except Exception:
+        return True
+
+
 def push(image_path, log=None):
     """
     把一张图推上去。有笔记就覆盖，没有就新建。
@@ -50,6 +68,12 @@ def push(image_path, log=None):
     st = config.load_note_state()
     today = datetime.date.today().strftime("%Y%m%d")
 
+    # 笔记可能被用户在平板上删了 —— 先确认它还在不在云端
+    if st and not _note_exists(cli, st["fileId"]):
+        say("这本笔记已经不在云端了（应该是被删了），重新建一本")
+        config.clear_note_state()
+        st = None
+
     if st:
         # 同一本笔记（fileId 不变），page_hash 决定页资源在 OSS 上的路径。
         # 同一天内一直复用 → 路径不变，只换一张图，最省流量。
@@ -64,11 +88,20 @@ def push(image_path, log=None):
                 % (st.get("originDay"), today))
             say("覆盖已有笔记：%s" % st["fileId"])
 
-        r = zy_upload.upload_note_page(
-            cli, image_path, note_name=st.get("noteName"),
-            keep_source=True, progress=say,
-            reuse_file_id=st["fileId"],
-            reuse_page_hash=page_hash)
+        try:
+            r = zy_upload.upload_note_page(
+                cli, image_path, note_name=st.get("noteName"),
+                keep_source=True, progress=say,
+                reuse_file_id=st["fileId"],
+                reuse_page_hash=page_hash)
+        except zy_client.ZhongYuError as e:
+            # 兜底：上面那次检查万一没看出来（接口没返回这本、或刚好网络抖动），
+            # 服务端建笔记时会说主键重复。那就忘掉旧记录，换个新 ID 重来一次。
+            if "Duplicate entry" in str(e):
+                say("云端还留着旧记录，换个新笔记重建")
+                config.clear_note_state()
+                return push(image_path, log)
+            raise
 
         if not same_day:
             # 只有跨天才写回；今天之内的后续推送就都复用这条路径了
