@@ -56,17 +56,19 @@ IMG_FILENAME = ("B466246B6F67160E63431159941CD9A9"
 # 覆盖模式（屏幕推送工具用）
 #
 # 云端路径是  note_v2/res/{userId}/{today}/{fileId}/{page_hash}/...
-# 三段都会变，其中 today / page_hash 每次都变的话，路径就每次不同，
+# 三段都会变，其中 page_hash 每次都变的话，路径就每次不同，
 # 8 个模板文件都得跟着重传。
 #
-# 钉死 fileId + page_hash + today 之后路径永久固定，点一次按钮只换一张
+# 复用 fileId + page_hash 之后路径就固定了，点一次按钮只换一张
 # screenshot.png 就行。⚠️ 但**绝对不能钉死 datetime.now()** ——
 # STS 签名带时间戳，钉死服务端会返回 {"error":{"code":100,"message":"Expired data."}}。
 #
-# 这里的 today 取「笔记首次创建那天」—— 它必须和当初建笔记时用的一致，
-# 否则路径照样变。所以它跟着 fileId 一起存进本地状态文件。
+# ⚠️⚠️ 而 today **必须是当天**，不能钉死成「建笔记那天」——
+# 临时凭证是按天签发的，它的会话策略只允许写**当天日期**的目录，
+# 写昨天的路径会直接 403 AccessDenied (by authorizer's policy)。
+# 2026-10-05 跨天后实测踩到，症状是「昨天还好好的，今天就传不上去了」。
+# 跨天换路径交给 core.push 处理（换一个新的 page_hash），本模块只管用当天日期。
 # ---------------------------------------------------------------------------
-_ORIGINAL_DAY = "20261004"
 
 
 
@@ -475,12 +477,9 @@ def upload_note_page(cli, image_path, note_name, parent_id="0", progress=print,
     if not user_id:
         raise zy_client.ZhongYuError("拿不到 userId（JWT 里没有 sub）")
 
-    # ⚠️ 覆盖模式下**日期也必须钉死** —— 否则跨天时 today 变了，路径就跟着变。
-    #  （绝对不能钉死 datetime.now()：STS 签名带时间戳，钉死会报 "Expired data"）
-    if reuse_page_hash:
-        today = _ORIGINAL_DAY
-    else:
-        today = datetime.date.today().strftime("%Y%m%d")
+    # 路径里的日期**必须是今天**，不能跟随「建笔记那天」——
+    # 临时凭证只允许写当天目录，钉死旧日期会 403（见文件头说明）。
+    today = datetime.date.today().strftime("%Y%m%d")
     custom_file_id = reuse_file_id or generate_custom_file_id()
     stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
