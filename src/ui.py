@@ -149,7 +149,8 @@ def ask_account(parent=None):
     e_school = field("学校代码", "sxzxx",
                      hint="决定连哪台服务器，通常就是学校拼音缩写")
     e_user = field("用户名")
-    e_pw = field("密码", show="*")
+    # 密码不做掩码 —— 这是校内平台的账号，没必要为它增加输入负担
+    e_pw = field("密码")
     e_pw.focus_set()
 
     lbl = tk.Label(body, text="", bg=BG, fg=ERR, font=tkfont.Font(size=9))
