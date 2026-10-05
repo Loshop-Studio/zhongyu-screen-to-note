@@ -41,12 +41,14 @@ def api_base_for_school(school):
 IMG_SCALE = 1.0        # 图在页面里的占比（1.0 = 铺满）
 JPEG_QUALITY = 85
 
-# 推送间隔（秒）—— 两个模式各一份设置
-# ⚠️ 下限 4 秒 —— 一次截图+上传大概 2~3 秒，比这更快只会让请求互相排队，
-#    平板上反而更卡，流量白烧。
-MIN_INTERVAL = 4.0
-DEFAULT_AUTO_INTERVAL = 5.0     # 自动：无条件每隔这么久推一张
-DEFAULT_SMART_INTERVAL = 5.0    # 智能：切应用后的最高刷新率（最快多久刷一次）
+# 推送间隔（秒）—— 两个模式各一份设置，下限也各不相同
+# ⚠️ 下限的由来：一次截图 + 上传大概要 2~3 秒，比这更快只会让请求互相排队，
+#    平板上反而更卡，流量也是白烧。
+MIN_AUTO_INTERVAL = 6.0         # 自动：无条件定时推，压太密没意义
+MIN_SMART_INTERVAL = 5.0        # 智能：只在切应用时触发，可以稍快一点
+
+DEFAULT_AUTO_INTERVAL = 6.0     # 自动模式默认间隔
+DEFAULT_SMART_INTERVAL = 5.0    # 智能模式默认最高刷新率
 
 
 def _ensure_dir():
@@ -103,13 +105,13 @@ def save_settings(d):
     return d
 
 
-def _clean_interval(v, default):
-    """间隔必须是 >= MIN_INTERVAL 的数字，不合规就退回默认值。"""
+def _clean_interval(v, default, minimum):
+    """间隔必须是 >= minimum 的数字，不合规就退回默认值。"""
     try:
         v = float(v)
     except (TypeError, ValueError):
         return default
-    if v < MIN_INTERVAL:
+    if v < minimum:
         return default
     return v
 
@@ -117,13 +119,13 @@ def _clean_interval(v, default):
 def get_auto_interval():
     """自动模式的推送间隔（秒）。"""
     return _clean_interval(load_settings().get("autoInterval"),
-                           DEFAULT_AUTO_INTERVAL)
+                           DEFAULT_AUTO_INTERVAL, MIN_AUTO_INTERVAL)
 
 
 def get_smart_interval():
     """智能模式的最高刷新率（秒）—— 切应用后最快多久刷一次。"""
     return _clean_interval(load_settings().get("smartInterval"),
-                           DEFAULT_SMART_INTERVAL)
+                           DEFAULT_SMART_INTERVAL, MIN_SMART_INTERVAL)
 
 
 def set_interval(key, seconds):

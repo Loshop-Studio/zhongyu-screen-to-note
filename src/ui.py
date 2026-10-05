@@ -88,7 +88,8 @@ _MODE_HINT = {
 AUTO_INTERVAL_MS = 5000      # 自动模式默认间隔（会被 settings.json 覆盖）
 SMART_CHECK_MS = 2000        # 智能模式查前台窗口的间隔（固定，只管"发现得及不及时"）
 SMART_POLL_MS = 500          # 主线程检查"该不该推了"的节拍
-MIN_INTERVAL = 4.0           # 间隔下限（秒）
+# 两个模式的间隔下限不同（自动 6 秒 / 智能 5 秒），定义在 config 里：
+# MIN_AUTO_INTERVAL / MIN_SMART_INTERVAL
 
 # 上传其实已经完成了，但**再等一下才报"完成"**。
 # 原因：我们这边上传结束 ≠ 平板那边刷新出来，中间还有约 1 秒（服务端落库 + 平板拉取）。
@@ -244,12 +245,13 @@ def ask_account(parent=None):
 
 # --------------------------------------------------------- 间隔/刷新率设置
 
-def ask_interval(parent, title, hint, default_value):
+def ask_interval(parent, title, hint, default_value, min_value):
     """
     输入一个秒数。
 
     title / hint 由调用方给，**两个模式必须写得不一样** —— 不然用户分不清
     自己调的是"自动模式的推送间隔"还是"智能模式的最高刷新率"。
+    min_value 同理：两个模式下限不同（自动 6 秒 / 智能 5 秒），也由调用方传。
 
     返回 (是否确定, 新值)。
     """
@@ -288,7 +290,7 @@ def ask_interval(parent, title, hint, default_value):
     tk.Label(row, text="秒", bg=BG, fg=SUB,
              font=tkfont.Font(size=10)).pack(side="left", padx=(6, 0))
 
-    lbl = tk.Label(body, text="最小 %s 秒" % config.fmt_seconds(config.MIN_INTERVAL),
+    lbl = tk.Label(body, text="最小 %s 秒" % config.fmt_seconds(min_value),
                    bg=BG, fg=SUB, font=tkfont.Font(size=9))
     lbl.pack(anchor="w", pady=(0, 12))
 
@@ -301,9 +303,9 @@ def ask_interval(parent, title, hint, default_value):
         except ValueError:
             lbl.config(text="请填数字", fg=ERR)
             return
-        if v < config.MIN_INTERVAL:
+        if v < min_value:
             lbl.config(text="最小不能低于 %s 秒"
-                            % config.fmt_seconds(config.MIN_INTERVAL), fg=ERR)
+                            % config.fmt_seconds(min_value), fg=ERR)
             return
         result["ok"] = True
         result["value"] = v
@@ -502,7 +504,8 @@ class FloatingBar(object):
             title="自动模式 · 推送间隔",
             hint="自动模式会按这个间隔**一直定时推送**，不管你切不切窗口。\n\n"
                  "填得越小画面越实时，流量也越大。",
-            default_value=self.auto_interval)
+            default_value=self.auto_interval,
+            min_value=config.MIN_AUTO_INTERVAL)
         if not r["ok"]:
             return
         self.auto_interval = r["value"]
@@ -519,7 +522,8 @@ class FloatingBar(object):
             hint="这里设的是**最高刷新率**，不是定时推送。\n\n"
                  "智能模式只在你**切换应用**时才推；填 10 就表示切换后最快\n"
                  "10 秒刷新一次。一直不换应用的话，一张都不会推。",
-            default_value=self.smart_interval)
+            default_value=self.smart_interval,
+            min_value=config.MIN_SMART_INTERVAL)
         if not r["ok"]:
             return
         self.smart_interval = r["value"]
