@@ -245,13 +245,14 @@ def ask_account(parent=None):
 
 # --------------------------------------------------------- 间隔/刷新率设置
 
-def ask_interval(parent, title, hint, default_value, min_value):
+def ask_interval(parent, title, hint, default_value, min_value, warning=None):
     """
     输入一个秒数。
 
     title / hint 由调用方给，**两个模式必须写得不一样** —— 不然用户分不清
     自己调的是"自动模式的推送间隔"还是"智能模式的最高刷新率"。
     min_value 同理：两个模式下限不同（自动 6 秒 / 智能 5 秒），也由调用方传。
+    warning  —— 可选的红色风险提示行（比如自动模式账号风险）
 
     返回 (是否确定, 新值)。
     """
@@ -277,8 +278,14 @@ def ask_interval(parent, title, hint, default_value, min_value):
     except Exception:
         scale = 1.0
     tk.Label(body, text=hint, bg=BG, fg=SUB, font=tkfont.Font(size=9),
-             justify="left", wraplength=int(300 * scale)).pack(anchor="w",
-                                                                pady=(5, 14))
+             justify="left", wraplength=int(300 * scale)).pack(
+                 anchor="w", pady=(5, 8 if warning else 14))
+
+    # 风险提示单独占一行、用红色 —— 别跟普通说明混在一起，否则没人看得见
+    if warning:
+        tk.Label(body, text=warning, bg=BG, fg=ERR, font=tkfont.Font(size=9),
+                 justify="left", wraplength=int(300 * scale)).pack(
+                     anchor="w", pady=(0, 14))
 
     row = tk.Frame(body, bg=BG)
     row.pack(fill="x", pady=(0, 6))
@@ -329,6 +336,61 @@ def ask_interval(parent, title, hint, default_value, min_value):
     e.focus_set()
     dlg.wait_window()
     return result
+
+
+def warn_dialog(parent, title, message, ok_text="我知道了", cancel_text=None):
+    """
+    一句提醒 + 确认。返回 True 表示用户点了确认。
+
+    给了 cancel_text 就多一个取消按钮（点了返回 False），
+    用于"要么接受、要么放弃这个操作"的场景（比如切到自动模式前的免责说明）。
+    """
+    dlg = tk.Toplevel(parent)
+    dlg.title(title)
+    dlg.configure(bg=BG)
+    dlg.resizable(False, False)
+    dlg.transient(parent)
+    try:
+        dlg.grab_set()
+    except Exception:
+        pass
+
+    body = tk.Frame(dlg, bg=BG, padx=22, pady=18)
+    body.pack(fill="both", expand=True)
+
+    tk.Label(body, text=title, bg=BG, fg=FG,
+             font=tkfont.Font(size=13, weight="bold")).pack(anchor="w")
+    try:
+        scale = parent.winfo_fpixels("1i") / 96.0
+    except Exception:
+        scale = 1.0
+    # 提醒正文用红色，跟普通说明区分开
+    tk.Label(body, text=message, bg=BG, fg=ERR, font=tkfont.Font(size=10),
+             justify="left", wraplength=int(300 * scale)).pack(anchor="w",
+                                                               pady=(8, 16))
+
+    res = {"ok": False}
+
+    def ok():
+        res["ok"] = True
+        dlg.destroy()
+
+    btns = tk.Frame(body, bg=BG)
+    btns.pack(fill="x")
+    tk.Button(btns, text=ok_text, command=ok, bg=ACCENT, fg="white",
+              activebackground="#1D4FD8", activeforeground="white",
+              relief="flat", bd=0, cursor="hand2",
+              font=tkfont.Font(size=10, weight="bold"),
+              width=10).pack(side="right", ipady=3)
+    if cancel_text:
+        tk.Button(btns, text=cancel_text, command=dlg.destroy, bg="#E5E7EB",
+                  fg=FG, activebackground="#D1D5DB", relief="flat", bd=0,
+                  cursor="hand2", font=tkfont.Font(size=10),
+                  width=8).pack(side="right", padx=(0, 8), ipady=3)
+
+    dlg.bind("<Escape>", lambda e: dlg.destroy())
+    dlg.wait_window()
+    return res["ok"]
 
 
 # ----------------------------------------------------------------- 悬浮窗
@@ -490,6 +552,14 @@ class FloatingBar(object):
     def set_mode(self, mode):
         if mode == self.mode:
             return
+        # 切到自动模式前先提示风险 —— 它是无条件定时上传，最容易触发风控
+        if mode == "auto":
+            if not warn_dialog(self.root, "免责说明",
+                               "使用该功能账号有被封风险。",
+                               ok_text="我知道了", cancel_text="取消"):
+                # 用户点了取消：把菜单里刚打上的勾恢复回去，模式保持不变
+                self._mode_var.set(self.mode)
+                return
         self.mode = mode
         _write_mode(mode)
         if self._mode_var.get() != mode:
@@ -505,7 +575,8 @@ class FloatingBar(object):
             hint="自动模式会按这个间隔**一直定时推送**，不管你切不切窗口。\n\n"
                  "填得越小画面越实时，流量也越大。",
             default_value=self.auto_interval,
-            min_value=config.MIN_AUTO_INTERVAL)
+            min_value=config.MIN_AUTO_INTERVAL,
+            warning="免责说明：刷新率过高容易导致账号被封")
         if not r["ok"]:
             return
         self.auto_interval = r["value"]
